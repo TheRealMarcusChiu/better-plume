@@ -1,0 +1,16 @@
+{
+  "name": "better-plume",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node test-server.mjs 8080",
+    "test": "node_modules/.bin/playwright test --config tests/playwright.config.mjs",
+    "test:headed": "node_modules/.bin/playwright test --config tests/playwright.config.mjs --headed",
+    "test:engine": "node_modules/.bin/playwright test --config tests/playwright.config.mjs tests/engine.spec.mjs",
+    "test:e2e": "node_modules/.bin/playwright test --config tests/playwright.config.mjs tests/e2e.spec.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "peer": "^1.0.2"
+  }
+}

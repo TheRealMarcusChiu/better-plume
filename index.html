@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Plume</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{font-family:Inter,system-ui,-apple-system,sans-serif;color-scheme:dark}
+html,body{width:100%;height:100%;overflow:hidden;background:#020c18}
+#canvas{display:block;width:100%;height:100%;touch-action:none}
+
+/* ── Overlay (landing + dead screen) ─────────────────────────────── */
+.overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:20;background:rgba(2,8,18,0.72);backdrop-filter:blur(6px)}
+.card{background:#0d1520;border:1px solid #1c2d45;border-radius:16px;padding:32px 28px;width:min(380px,92vw);box-shadow:0 8px 40px rgba(0,0,0,0.5)}
+.card h1{font-size:28px;font-weight:800;letter-spacing:-1px;color:#e8f0fe;margin-bottom:4px}
+.card .sub{font-size:13px;color:#4a7090;margin-bottom:24px;letter-spacing:0.3px}
+.btn{display:block;width:100%;padding:12px 16px;border-radius:10px;border:1px solid #1c3050;background:#111e30;color:#d4e4f4;font:600 14px/1 inherit;cursor:pointer;transition:background .15s,border-color .15s;text-align:center}
+.btn:hover{background:#162640;border-color:#2a4a70}
+.btn.primary{background:#0066cc;border-color:#0066cc;color:#fff}
+.btn.primary:hover{background:#0055aa;border-color:#0055aa}
+.btn:disabled{opacity:0.4;cursor:not-allowed}
+.btn-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0}
+.inp{display:block;width:100%;padding:11px 13px;border-radius:9px;border:1px solid #1c3050;background:#080f1c;color:#cce0f4;font:14px/1.4 inherit;outline:none;margin-bottom:12px}
+.inp:focus{border-color:#0066cc;box-shadow:0 0 0 2px rgba(0,100,200,0.18)}
+.inp::placeholder{color:#2e4a68}
+label{display:block;font-size:12px;font-weight:600;color:#4a7090;margin-bottom:6px;text-transform:uppercase;letter-spacing:.8px}
+.sep{text-align:center;color:#1c3050;font-size:12px;margin:14px 0;border-top:1px solid #1c3050;padding-top:12px}
+.err{color:#ff6b6b;font-size:13px;min-height:18px;margin-top:6px}
+[hidden]{display:none!important}
+
+/* ── HUD ─────────────────────────────────────────────────────────── */
+#hud{position:fixed;inset:0;pointer-events:none;z-index:10}
+#hud-tl{position:absolute;top:14px;left:14px;display:flex;flex-direction:column;gap:8px}
+#hud-tr{position:absolute;top:14px;right:14px;display:flex;flex-direction:column;gap:0;align-items:flex-end}
+.hud-pill{background:rgba(8,16,28,0.82);border:1px solid rgba(0,150,200,0.2);border-radius:8px;padding:7px 12px;font-size:12px;color:#6ab0d4;pointer-events:auto;white-space:nowrap}
+.hud-pill b{color:#e0f0ff;font-weight:700}
+#score-pill b{font-size:18px}
+#lb{background:rgba(8,16,28,0.82);border:1px solid rgba(0,150,200,0.2);border-radius:10px;min-width:160px;pointer-events:auto;overflow:hidden}
+#lb-head{padding:7px 12px;font-size:11px;font-weight:700;color:#4a7090;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid rgba(0,150,200,0.12)}
+.lb-row{display:flex;align-items:center;gap:8px;padding:5px 12px;font-size:12px;border-bottom:1px solid rgba(0,150,200,0.06)}
+.lb-row:last-child{border-bottom:0}
+.lb-dot{width:9px;height:9px;border-radius:50%;flex:none}
+.lb-name{color:#c0d8f0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb-score{color:#6ab0d4;font-variant-numeric:tabular-nums}
+.hud-pill.btn-pill{padding:6px 10px;cursor:pointer;font-size:12px}
+.hud-pill.btn-pill:hover{border-color:rgba(0,200,255,0.35);color:#c0e8f8}
+
+/* ── Dead screen ─────────────────────────────────────────────────── */
+#dead-screen{z-index:30}
+#dead-screen .card{text-align:center}
+#dead-screen h2{font-size:32px;font-weight:800;color:#ff6b6b;margin-bottom:8px}
+#dead-screen .ds{font-size:14px;color:#4a7090;margin-bottom:20px}
+#dead-score{font-size:20px;font-weight:700;color:#e0f0ff;margin-bottom:24px}
+
+/* ── Mobile touch joy ─────────────────────────────────────────────── */
+#joystick-area{position:fixed;bottom:0;left:0;right:0;height:220px;z-index:15;pointer-events:auto;touch-action:none;display:none}
+@media(max-width:700px),pointer:coarse{
+  #joystick-area{display:block}
+  #hud-tr{top:auto;bottom:16px;right:16px;flex-direction:column-reverse}
+  #hud-tl{top:10px}
+}
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<!-- ── Landing overlay ──────────────────────────────────────────────────── -->
+<div class="overlay" id="landing">
+  <div class="card">
+    <h1>Plume</h1>
+    <p class="sub">Multiplayer underwater micro-organism</p>
+
+    <div id="choice">
+      <div class="btn-row">
+        <button class="btn primary" id="btn-create">Create room</button>
+        <button class="btn" id="btn-join">Join room</button>
+      </div>
+    </div>
+
+    <div id="form-create" hidden>
+      <label for="inp-name-c">Your name</label>
+      <input id="inp-name-c" class="inp" maxlength="32" placeholder="Enter name" autocomplete="nickname" spellcheck="false">
+      <div class="btn-row">
+        <button class="btn" id="btn-back-c">← Back</button>
+        <button class="btn primary" id="btn-go-create">Create</button>
+      </div>
+    </div>
+
+    <div id="form-join" hidden>
+      <label for="inp-name-j">Your name</label>
+      <input id="inp-name-j" class="inp" maxlength="32" placeholder="Enter name" autocomplete="nickname" spellcheck="false">
+      <label for="inp-code">Room code</label>
+      <input id="inp-code" class="inp" maxlength="6" placeholder="ABCDEF" autocapitalize="characters" autocomplete="off" spellcheck="false" style="text-transform:uppercase;letter-spacing:3px;font-family:monospace">
+      <div class="btn-row">
+        <button class="btn" id="btn-back-j">← Back</button>
+        <button class="btn primary" id="btn-go-join">Join</button>
+      </div>
+    </div>
+
+    <div class="err" id="status-msg" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<!-- ── Dead screen ──────────────────────────────────────────────────────── -->
+<div class="overlay" id="dead-screen" hidden>
+  <div class="card">
+    <h2>You died</h2>
+    <p class="ds">Your plume dissolved into the current…</p>
+    <div id="dead-score"></div>
+    <button class="btn primary" id="btn-respawn">Respawn</button>
+    <button class="btn" id="btn-leave-dead" style="margin-top:10px">Leave room</button>
+  </div>
+</div>
+
+<!-- ── HUD ──────────────────────────────────────────────────────────────── -->
+<div id="hud" hidden>
+  <div id="hud-tl">
+    <div class="hud-pill" id="score-pill">Score: <b id="score-val">0</b></div>
+    <div class="hud-pill" id="room-pill">Room <b id="room-code-disp"></b></div>
+    <div class="hud-pill btn-pill" id="copy-link" title="Copy invite link">⬡ Copy link</div>
+    <div class="hud-pill btn-pill" id="btn-leave-hud">✕ Leave</div>
+  </div>
+  <div id="hud-tr">
+    <div id="lb">
+      <div id="lb-head">Leaderboard</div>
+      <div id="lb-rows"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Touch joystick area (invisible, captures pointer for angle input) -->
+<div id="joystick-area"></div>
+
+<script src="peerjs.min.js"></script>
+<script type="module">
+import { createEngine, PLAYER_COLORS, WORLD_W, WORLD_H, MAX_PLAYERS } from './engine.js';
+import { render, addBurst, setCameraImmediate } from './render.js';
+
+// ── URL params ────────────────────────────────────────────────────────────────
+const params = new URLSearchParams(location.search);
+const peerOpts = params.get('signal') === 'local'
+  ? { host: params.get('signalHost') || location.hostname, port: Number(params.get('signalPort') || 9001), path: '/peerjs', secure: false }
+  : {};
+const TEST_MODE = params.get('test') === '1';
+const PREFIX = 'plume-v1-';
+
+// ── Canvas resize ─────────────────────────────────────────────────────────────
+const canvas = document.getElementById('canvas');
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+resize(); window.addEventListener('resize', resize);
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let peer = null, upstream = null, isHost = false;
+let myId = '', myColor = '', myName = '';
+let roomCode = '';
+let connections = new Map();   // id → conn (host only)
+let engine = null;             // host only
+let renderState = null;        // current game state for rendering
+let localAlive = true;
+let handshakeTimer = null;
+let pingInterval = null;
+let lastHostMsg = 0;
+let simInterval = null, snapInterval = null;
+
+// Guest interpolation between 12 Hz snapshots
+let drState = null;
+let prevSnapState = null;
+let prevSnapTime = 0;
+let lastSnapTime = 0;
+let _peerOpenTimer = null;
+let _createRetries = 0;
+
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const landing = $('landing');
+const deadScreen = $('dead-screen');
+const hud = $('hud');
+const statusMsg = $('status-msg');
+
+function setStatus(msg) { statusMsg.textContent = msg; }
+
+// ── UI flow ───────────────────────────────────────────────────────────────────
+$('btn-create').onclick = () => { $('choice').hidden = true; $('form-create').hidden = false; $('inp-name-c').focus(); };
+$('btn-join').onclick = () => {
+  $('choice').hidden = true; $('form-join').hidden = false;
+  // Pre-fill room code from URL ?room=
+  const rc = params.get('room');
+  if (rc) $('inp-code').value = rc.toUpperCase();
+  $('inp-name-j').focus();
+};
+$('btn-back-c').onclick = () => { $('form-create').hidden = true; $('choice').hidden = false; setStatus(''); };
+$('btn-back-j').onclick = () => { $('form-join').hidden = true; $('choice').hidden = false; setStatus(''); };
+$('btn-go-create').onclick = () => beginCreate();
+$('btn-go-join').onclick = () => beginJoin();
+
+for (const inp of [$('inp-name-c'), $('inp-name-j'), $('inp-code')]) {
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') (inp === $('inp-code') || inp === $('inp-name-j')) ? beginJoin() : beginCreate(); });
+}
+
+$('copy-link').onclick = () => {
+  const url = new URL(location.href);
+  url.searchParams.set('room', roomCode);
+  navigator.clipboard.writeText(url.toString()).then(() => {
+    $('copy-link').textContent = '✓ Copied!';
+    setTimeout(() => $('copy-link').textContent = '⬡ Copy link', 1800);
+  });
+};
+$('btn-leave-hud').onclick = leave;
+$('btn-leave-dead').onclick = leave;
+$('btn-respawn').onclick = requestRespawn;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function randomCode() {
+  const a = new Uint32Array(6); crypto.getRandomValues(a);
+  return Array.from(a, n => String.fromCharCode(65 + n % 26)).join('');
+}
+
+function encode(d) { return JSON.stringify(d); }
+// maxLen: 32 KiB for guest→host input packets; 256 KiB for host→guest snapshots.
+function decode(raw, maxLen = 32768) {
+  if (typeof raw !== 'string' || raw.length > maxLen) return null;
+  try { const d = JSON.parse(raw); return d && typeof d === 'object' ? d : null; } catch { return null; }
+}
+function send(conn, d) {
+  if (!conn?.open) return;
+  // Use RTCDataChannel.bufferedAmount (bytes) for real backpressure.
+  const dc = conn.dataChannel;
+  if (dc && dc.bufferedAmount > 262144) { conn.close(); return; }
+  try { conn.send(encode(d)); } catch { conn.close(); }
+}
+function broadcast(d) { for (const c of connections.values()) if (c.accepted) send(c, d); }
+
+function enterRoom() {
+  landing.hidden = true;
+  hud.hidden = false;
+  $('room-code-disp').textContent = roomCode;
+}
+
+function showDead(score) {
+  localAlive = false;
+  deadScreen.hidden = false;
+  $('dead-score').textContent = `Final score: ${score}`;
+}
+
+function updateHUD(state) {
+  if (!state?.players) return;
+  const me = state.players.find(p => p.id === myId);
+  if (me) $('score-val').textContent = me.score;
+
+  const sorted = [...state.players].filter(p => p.alive).sort((a, b) => b.score - a.score).slice(0, 8);
+  const rows = $('lb-rows');
+  rows.innerHTML = '';
+  for (const p of sorted) {
+    const row = document.createElement('div');
+    row.className = 'lb-row';
+    const dot = document.createElement('span');
+    dot.className = 'lb-dot';
+    dot.style.backgroundColor = p.color;
+    const name = document.createElement('span');
+    name.className = 'lb-name';
+    name.textContent = p.name + (p.id === myId ? ' ★' : '');
+    const score = document.createElement('span');
+    score.className = 'lb-score';
+    score.textContent = p.score;
+    row.append(dot, name, score);
+    rows.append(row);
+  }
+}
+
+// Reset the landing page to the initial choice view.
+function showLanding(msg = '') {
+  landing.hidden = false;
+  hud.hidden = true;
+  deadScreen.hidden = true;
+  $('choice').hidden = false;
+  $('form-create').hidden = true;
+  $('form-join').hidden = true;
+  setStatus(msg);
+}
+
+function leave() {
+  if (isHost) broadcast({ t: 'end', reason: 'Host left the room.' });
+  stopAll();
+  showLanding('You left the room.');
+}
+
+function stopAll() {
+  clearInterval(simInterval); clearInterval(snapInterval); clearInterval(pingInterval);
+  clearTimeout(handshakeTimer); clearTimeout(_peerOpenTimer);
+  simInterval = snapInterval = pingInterval = handshakeTimer = _peerOpenTimer = null;
+  const old = peer; peer = null; old?.destroy();
+  upstream = null; connections.clear();
+  engine = null; renderState = null; drState = null;
+  prevSnapState = null; prevSnapTime = 0; lastSnapTime = 0;
+  isHost = false; localAlive = true;
+  // Re-enable entry buttons so the user can create/join again after leaving.
+  $('btn-go-create').disabled = false;
+  $('btn-go-join').disabled = false;
+}
+
+// ── Host logic ─────────────────────────────────────────────────────────────────
+function beginCreate() {
+  if ($('btn-go-create').disabled) return; // guard against duplicate calls
+  const name = $('inp-name-c').value.trim();
+  if (!name) { setStatus('Enter your name first.'); $('inp-name-c').focus(); return; }
+  if (typeof Peer === 'undefined') { setStatus('PeerJS could not load.'); return; }
+  setStatus('Creating room…');
+  $('btn-go-create').disabled = true;
+  _createRetries = 0;
+  _doCreate(name);
+}
+
+function _doCreate(name) {
+  roomCode = randomCode();
+  const p = new Peer(PREFIX + roomCode, peerOpts);
+  peer = p; isHost = true;
+
+  // Timeout if Peer never opens (e.g. signaling server unreachable).
+  _peerOpenTimer = setTimeout(() => {
+    if (peer !== p) return;
+    stopAll(); showLanding('Room setup timed out. Try again.');
+  }, 15000);
+
+  p.on('open', () => {
+    clearTimeout(_peerOpenTimer);
+    if (peer !== p) return;
+    engine = createEngine();
+    const res = engine.addPlayer(p.id, name);
+    if (!res.player) { setStatus('Error: ' + res.error); stopAll(); return; }
+    myId = p.id; myColor = res.player.color; myName = name;
+    renderState = engine.snapshot();
+    lastSnapTime = Date.now();
+    enterRoom();
+    setStatus('');
+    startHostLoop();
+  });
+
+  p.on('connection', conn => { if (peer === p && isHost) onGuestConnect(conn); else conn.close(); });
+  p.on('error', e => {
+    if (peer !== p) return;
+    clearTimeout(_peerOpenTimer);
+    if (e.type === 'unavailable-id' && ++_createRetries <= 5) {
+      p.destroy(); peer = null;
+      _doCreate(name); return;
+    }
+    stopAll(); showLanding('Error: ' + e.type);
+  });
+  p.on('disconnected', () => { if (peer === p) p.reconnect(); });
+}
+
+function startHostLoop() {
+  const TICK_MS = 1000 / 30;
+  const SNAP_MS = 1000 / 12;
+
+  simInterval = setInterval(() => {
+    if (!engine) return;
+    engine.step();
+    // Update renderState at 30 Hz so host rendering is smooth.
+    renderState = engine.snapshot();
+    // Check if local player just died
+    const me = renderState.players.find(p => p.id === myId);
+    if (me && !me.alive && localAlive) {
+      localAlive = false;
+      showDead(me.score);
+    }
+  }, TICK_MS);
+
+  snapInterval = setInterval(() => {
+    if (!engine) return;
+    const snap = engine.snapshot();
+    broadcast(snap);
+    // Clear pending bursts only after they've been sent to guests.
+    engine.flushBursts();
+  }, SNAP_MS);
+
+  pingInterval = setInterval(() => {
+    for (const c of connections.values()) {
+      const age = Date.now() - (c.lastSeen || 0);
+      if (age > 16000) { c.close(); continue; }
+      send(c, { t: 'ping' });
+    }
+  }, 4000);
+}
+
+function onGuestConnect(conn) {
+  if (connections.size >= MAX_PLAYERS - 1) { conn.close(); return; }
+  connections.set(conn.peer, conn);
+  conn.lastSeen = Date.now();
+  conn.rateT = Date.now(); conn.rateN = 0;
+
+  conn.on('data', raw => {
+    const d = decode(raw);
+    if (!d) { conn.close(); return; }
+    conn.lastSeen = Date.now();
+
+    if (d.t === 'pong') return;
+
+    if (!conn.accepted) {
+      if (d.t !== 'hello' || typeof d.name !== 'string') { conn.close(); return; }
+      const res = engine.addPlayer(conn.peer, d.name);
+      if (!res.player) {
+        send(conn, { t: 'error', message: res.error });
+        setTimeout(() => conn.close(), 300);
+        return;
+      }
+      conn.accepted = true;
+      conn.playerId = conn.peer;
+      const snap = engine.snapshot();
+      send(conn, { t: 'welcome', id: conn.peer, color: res.player.color, name: res.player.name, snapshot: snap });
+      broadcast({ t: 'peer-joined', id: conn.peer, name: res.player.name, color: res.player.color });
+      return;
+    }
+
+    // Rate limit inputs: max 60/s
+    const now = Date.now();
+    if (now - conn.rateT > 1000) { conn.rateT = now; conn.rateN = 0; }
+    if (++conn.rateN > 60) return;
+
+    if (d.t === 'input') {
+      engine.setInput(conn.peer, d.angle);
+    } else if (d.t === 'respawn') {
+      engine.respawn(conn.peer);
+      const me = engine.players.find(p => p.id === conn.peer);
+      if (me) send(conn, { t: 'respawned', color: me.color });
+    }
+  });
+
+  conn.on('close', () => {
+    connections.delete(conn.peer);
+    if (engine) engine.removePlayer(conn.peer);
+  });
+  conn.on('error', () => conn.close());
+
+  const connTimer = setTimeout(() => {
+    if (!conn.accepted) conn.close();
+  }, 15000);
+  conn.on('open', () => clearTimeout(connTimer));
+}
+
+// ── Guest logic ────────────────────────────────────────────────────────────────
+function beginJoin() {
+  if ($('btn-go-join').disabled) return; // guard against duplicate calls
+  const name = $('inp-name-j').value.trim();
+  const code = $('inp-code').value.trim().toUpperCase();
+  if (!name) { setStatus('Enter your name first.'); $('inp-name-j').focus(); return; }
+  if (!/^[A-Z]{6}$/.test(code)) { setStatus('Enter a 6-letter room code.'); $('inp-code').focus(); return; }
+  if (typeof Peer === 'undefined') { setStatus('PeerJS could not load.'); return; }
+  setStatus('Connecting…');
+  $('btn-go-join').disabled = true;
+  roomCode = code;
+  myName = name;
+
+  const p = new Peer(peerOpts);
+  peer = p;
+
+  // Timeout if Peer never opens (signaling server unreachable).
+  _peerOpenTimer = setTimeout(() => {
+    if (peer !== p) return;
+    stopAll(); showLanding('Connection timed out. Check the code and try again.');
+  }, 15000);
+
+  p.on('open', () => {
+    clearTimeout(_peerOpenTimer);
+    if (peer !== p) return;
+    myId = p.id;
+    upstream = p.connect(PREFIX + code, { reliable: true, serialization: 'raw' });
+
+    handshakeTimer = setTimeout(() => {
+      stopAll(); showLanding('Connection timed out. Check the code and try again.');
+    }, 20000);
+
+    upstream.on('open', () => {
+      lastHostMsg = Date.now();
+      send(upstream, { t: 'hello', name });
+    });
+    upstream.on('data', raw => onHostData(raw));
+    upstream.on('close', () => {
+      if (peer === p) { stopAll(); showLanding('Host disconnected.'); }
+    });
+    upstream.on('error', () => {
+      if (peer === p) { stopAll(); showLanding('Could not reach host.'); }
+    });
+  });
+
+  p.on('error', e => {
+    if (peer !== p) return;
+    clearTimeout(_peerOpenTimer);
+    stopAll();
+    showLanding(e.type === 'peer-unavailable' ? 'Room not found. Check the code.' : 'Error: ' + e.type);
+  });
+  p.on('disconnected', () => { if (peer === p) p.reconnect(); });
+}
+
+function onHostData(raw) {
+  // Use 256 KiB limit for host→guest messages (snapshots can be large).
+  const d = decode(raw, 262144);
+  if (!d) return;
+  lastHostMsg = Date.now();
+
+  if (d.t === 'ping') { send(upstream, { t: 'pong' }); return; }
+
+  if (d.t === 'error') {
+    clearTimeout(handshakeTimer);
+    stopAll();
+    showLanding(d.message || 'Could not join room.');
+    return;
+  }
+
+  if (d.t === 'welcome') {
+    clearTimeout(handshakeTimer);
+    myColor = d.color; myName = d.name;
+    prevSnapState = null; prevSnapTime = 0;
+    renderState = d.snapshot;
+    lastSnapTime = Date.now();
+    drState = null;
+    localAlive = true;
+    enterRoom();
+    setStatus('');
+    startGuestLoop();
+    return;
+  }
+
+  if (d.t === 'snapshot') {
+    prevSnapState = renderState;
+    prevSnapTime = lastSnapTime;
+    renderState = d;
+    lastSnapTime = Date.now();
+    drState = null;
+    const me = d.players?.find(p => p.id === myId);
+    if (me && !me.alive && localAlive) {
+      localAlive = false;
+      showDead(me.score);
+    }
+    if (me && me.alive && !localAlive) {
+      localAlive = true;
+      deadScreen.hidden = true;
+    }
+    return;
+  }
+
+  if (d.t === 'end') {
+    stopAll();
+    showLanding(d.reason || 'The host ended the room.');
+    return;
+  }
+}
+
+function startGuestLoop() {
+  pingInterval = setInterval(() => {
+    if (!upstream?.open) return;
+    if (Date.now() - lastHostMsg > 18000) {
+      stopAll(); showLanding('Host stopped responding.'); return;
+    }
+  }, 4000);
+}
+
+function requestRespawn() {
+  if (isHost) {
+    if (engine) {
+      engine.respawn(myId);
+      localAlive = true;
+      deadScreen.hidden = true;
+    }
+  } else {
+    send(upstream, { t: 'respawn' });
+    localAlive = true;
+    deadScreen.hidden = true;
+  }
+}
+
+// ── Input handling ────────────────────────────────────────────────────────────
+let aimAngle = 0;
+
+function setAimFromEvent(e, rect) {
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  aimAngle = Math.atan2(e.clientY - cy, e.clientX - cx);
+}
+
+function sendInput() {
+  if (isHost) {
+    if (engine && localAlive) engine.setInput(myId, aimAngle);
+  } else {
+    if (upstream?.open && localAlive) send(upstream, { t: 'input', angle: aimAngle });
+  }
+}
+
+// Mouse
+document.addEventListener('mousemove', e => {
+  setAimFromEvent(e, canvas.getBoundingClientRect());
+});
+
+// Keyboard arrow/WASD → adjust angle
+const keys = {};
+document.addEventListener('keydown', e => { keys[e.key] = true; });
+document.addEventListener('keyup', e => { delete keys[e.key]; });
+
+function applyKeyboard() {
+  const LEFT = keys['ArrowLeft'] || keys['a'] || keys['A'];
+  const RIGHT = keys['ArrowRight'] || keys['d'] || keys['D'];
+  const UP = keys['ArrowUp'] || keys['w'] || keys['W'];
+  const DOWN = keys['ArrowDown'] || keys['s'] || keys['S'];
+  if (LEFT) aimAngle -= 0.06;
+  if (RIGHT) aimAngle += 0.06;
+  if (UP) aimAngle = Math.atan2(-1, 0);
+  if (DOWN) aimAngle = Math.atan2(1, 0);
+}
+
+// Touch joystick
+let touchId = null;
+const joystickArea = $('joystick-area');
+joystickArea.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  if (touchId !== null) return;
+  touchId = e.pointerId;
+  joystickArea.setPointerCapture(touchId);
+  setAimFromEvent(e, canvas.getBoundingClientRect());
+});
+joystickArea.addEventListener('pointermove', e => {
+  if (e.pointerId !== touchId) return;
+  e.preventDefault();
+  setAimFromEvent(e, canvas.getBoundingClientRect());
+});
+['pointerup', 'pointercancel'].forEach(ev => {
+  joystickArea.addEventListener(ev, e => { if (e.pointerId === touchId) touchId = null; });
+});
+
+// Also handle direct canvas touch for full-screen steering
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  setAimFromEvent(t, canvas.getBoundingClientRect());
+}, { passive: false });
+
+// Mild position interpolation for guests between 12 Hz snapshots.
+function interpolatedState() {
+  if (!renderState || isHost) return renderState;
+  if (!prevSnapState || !lastSnapTime) return renderState;
+  const SNAP_MS = 1000 / 12;
+  const alpha = Math.min(1, (Date.now() - lastSnapTime) / SNAP_MS);
+  if (alpha >= 1) return renderState;
+
+  const players = renderState.players.map(p => {
+    const prev = prevSnapState.players?.find(q => q.id === p.id);
+    if (!prev || !prev.alive || !p.alive || !p.body.length || !prev.body.length) return p;
+    const ix = prev.body[0][0] + (p.body[0][0] - prev.body[0][0]) * alpha;
+    const iy = prev.body[0][1] + (p.body[0][1] - prev.body[0][1]) * alpha;
+    return { ...p, body: [[Math.round(ix), Math.round(iy)], ...p.body.slice(1)] };
+  });
+  return { ...renderState, players };
+}
+
+// ── Render loop ───────────────────────────────────────────────────────────────
+let inputTick = 0;
+function loop(t) {
+  requestAnimationFrame(loop);
+
+  applyKeyboard();
+
+  // Send input ~30Hz
+  inputTick++;
+  if (inputTick % 2 === 0) sendInput();
+
+  // Host: renderState updated at 30 Hz by simInterval. Guest: interpolate between snapshots.
+  const state = interpolatedState();
+  if (state) updateHUD(state);
+  render(canvas, state, myId, t);
+}
+requestAnimationFrame(loop);
+
+// ── Test hooks ────────────────────────────────────────────────────────────────
+if (TEST_MODE) {
+  window.__plume = {
+    get engine() { return engine; },
+    get renderState() { return renderState; },
+    get myId() { return myId; },
+    get myColor() { return myColor; },
+    get myName() { return myName; },
+    get isHost() { return isHost; },
+    get roomCode() { return roomCode; },
+    get peer() { return peer; },
+    get localAlive() { return localAlive; },
+    beginCreate,
+    beginJoin,
+    leave,
+    requestRespawn,
+    setAimAngle: a => { aimAngle = a; },
+    PLAYER_COLORS,
+  };
+}
+
+// Cleanup on page hide
+window.addEventListener('pagehide', () => {
+  if (isHost) broadcast({ t: 'end', reason: 'Host left the room.' });
+  peer?.destroy();
+});
+</script>
+</body>
+</html>
