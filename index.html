@@ -5,56 +5,72 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>Plume</title>
 <style>
+/* ── Shared design tokens (kept in sync with Birdseye Arena) ──────── */
+:root{
+  --bg:#07090f;--surface:#0d1520;--raised:#111e30;--border:#1c2d45;
+  --primary:#4a8eff;--secondary:#a060ff;--danger:#ff6b6b;--success:#30ff88;
+  --text:#e8f0fe;--muted:#6a8daf;
+  --font-ui:Inter,system-ui,-apple-system,BlinkMacSystemFont,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,'Courier New',monospace;
+  --radius-card:16px;--radius-ctl:10px;
+  --focus-ring:0 0 0 3px rgba(74,142,255,.35);
+  font-family:var(--font-ui);color:var(--text);color-scheme:dark
+}
 *{box-sizing:border-box;margin:0;padding:0}
-:root{font-family:Inter,system-ui,-apple-system,sans-serif;color-scheme:dark}
-html,body{width:100%;height:100%;overflow:hidden;background:#020c18}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text)}
+button,input{font:inherit;color:inherit}
 #canvas{display:block;width:100%;height:100%;touch-action:none}
 
 /* ── Overlay (landing + dead screen) ─────────────────────────────── */
-.overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:20;background:rgba(2,8,18,0.72);backdrop-filter:blur(6px)}
-.card{background:#0d1520;border:1px solid #1c2d45;border-radius:16px;padding:32px 28px;width:min(380px,92vw);box-shadow:0 8px 40px rgba(0,0,0,0.5)}
-.card h1{font-size:28px;font-weight:800;letter-spacing:-1px;color:#e8f0fe;margin-bottom:4px}
-.card .sub{font-size:13px;color:#4a7090;margin-bottom:24px;letter-spacing:0.3px}
-.btn{display:block;width:100%;padding:12px 16px;border-radius:10px;border:1px solid #1c3050;background:#111e30;color:#d4e4f4;font:600 14px/1 inherit;cursor:pointer;transition:background .15s,border-color .15s;text-align:center}
-.btn:hover{background:#162640;border-color:#2a4a70}
-.btn.primary{background:#0066cc;border-color:#0066cc;color:#fff}
-.btn.primary:hover{background:#0055aa;border-color:#0055aa}
-.btn:disabled{opacity:0.4;cursor:not-allowed}
+.overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;z-index:20;background:rgba(7,9,15,.72);backdrop-filter:blur(6px)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);padding:36px 32px;width:min(400px,100%);box-shadow:0 0 60px rgba(74,142,255,.07),0 8px 40px rgba(0,0,0,.5)}
+.card h1{font-size:28px;font-weight:800;letter-spacing:-.5px;line-height:1.15;margin-bottom:6px;color:var(--primary);background:linear-gradient(130deg,var(--primary),var(--secondary));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.card .sub{font-size:13px;color:var(--muted);margin-bottom:28px;letter-spacing:.3px;line-height:1.5}
+.btn{display:block;width:100%;padding:12px 16px;border-radius:var(--radius-ctl);border:1px solid var(--border);background:var(--raised);color:var(--text);font-size:14px;font-weight:600;line-height:1;cursor:pointer;transition:filter .12s,background .12s,border-color .12s,box-shadow .12s;text-align:center}
+.btn:hover:not(:disabled){filter:brightness(1.2)}
+.btn.primary{background:var(--primary);border-color:transparent;color:#fff;box-shadow:0 0 20px rgba(74,142,255,.25)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
 .btn-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0}
-.inp{display:block;width:100%;padding:11px 13px;border-radius:9px;border:1px solid #1c3050;background:#080f1c;color:#cce0f4;font:14px/1.4 inherit;outline:none;margin-bottom:12px}
-.inp:focus{border-color:#0066cc;box-shadow:0 0 0 2px rgba(0,100,200,0.18)}
-.inp::placeholder{color:#2e4a68}
-label{display:block;font-size:12px;font-weight:600;color:#4a7090;margin-bottom:6px;text-transform:uppercase;letter-spacing:.8px}
-.sep{text-align:center;color:#1c3050;font-size:12px;margin:14px 0;border-top:1px solid #1c3050;padding-top:12px}
-.err{color:#ff6b6b;font-size:13px;min-height:18px;margin-top:6px}
+.inp{display:block;width:100%;padding:11px 14px;border-radius:var(--radius-ctl);border:1px solid var(--border);background:var(--raised);color:var(--text);font-size:14px;line-height:1.4;outline:none;margin-bottom:16px;transition:border-color .15s,box-shadow .15s}
+.inp:focus{border-color:var(--primary);box-shadow:var(--focus-ring)}
+.inp::placeholder{color:var(--muted);opacity:.7}
+#inp-code{font-family:var(--font-mono);font-size:16px;text-transform:uppercase;letter-spacing:4px}
+label{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.8px}
+.sep{text-align:center;color:var(--muted);font-size:12px;margin:14px 0;border-top:1px solid var(--border);padding-top:12px}
+.err{color:var(--danger);font-size:13px;line-height:1.5;min-height:20px;margin-top:12px}
 [hidden]{display:none!important}
 
 /* ── HUD ─────────────────────────────────────────────────────────── */
 #hud{position:fixed;inset:0;pointer-events:none;z-index:10}
-#hud-tl{position:absolute;top:14px;left:14px;display:flex;flex-direction:column;gap:8px}
+#hud-tl{position:absolute;top:14px;left:14px;display:flex;flex-direction:column;align-items:flex-start;gap:8px}
 #hud-tr{position:absolute;top:14px;right:14px;display:flex;flex-direction:column;gap:0;align-items:flex-end}
-.hud-pill{background:rgba(8,16,28,0.82);border:1px solid rgba(0,150,200,0.2);border-radius:8px;padding:7px 12px;font-size:12px;color:#6ab0d4;pointer-events:auto;white-space:nowrap}
-.hud-pill b{color:#e0f0ff;font-weight:700}
+.hud-pill{background:rgba(13,21,32,.88);border:1px solid var(--border);border-radius:var(--radius-ctl);padding:7px 12px;font-size:12px;color:var(--muted);pointer-events:auto;white-space:nowrap}
+.hud-pill b{color:var(--text);font-weight:700;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
 #score-pill b{font-size:18px}
-#lb{background:rgba(8,16,28,0.82);border:1px solid rgba(0,150,200,0.2);border-radius:10px;min-width:160px;pointer-events:auto;overflow:hidden}
-#lb-head{padding:7px 12px;font-size:11px;font-weight:700;color:#4a7090;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid rgba(0,150,200,0.12)}
-.lb-row{display:flex;align-items:center;gap:8px;padding:5px 12px;font-size:12px;border-bottom:1px solid rgba(0,150,200,0.06)}
+#room-pill b{color:var(--primary);letter-spacing:3px}
+#lb{background:rgba(13,21,32,.88);border:1px solid var(--border);border-radius:var(--radius-ctl);min-width:170px;pointer-events:auto;overflow:hidden}
+#lb-head{padding:8px 12px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border)}
+.lb-row{display:flex;align-items:center;gap:8px;padding:5px 12px;font-size:12px;border-bottom:1px solid rgba(28,45,69,.6)}
 .lb-row:last-child{border-bottom:0}
-.lb-dot{width:9px;height:9px;border-radius:50%;flex:none}
-.lb-name{color:#c0d8f0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lb-score{color:#6ab0d4;font-variant-numeric:tabular-nums}
-.hud-pill.btn-pill{padding:6px 10px;cursor:pointer;font-size:12px}
-.hud-pill.btn-pill:hover{border-color:rgba(0,200,255,0.35);color:#c0e8f8}
+.lb-dot{width:8px;height:8px;border-radius:50%;flex:none}
+.lb-name{color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb-score{color:var(--muted);font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.hud-pill.btn-pill{padding:6px 10px;cursor:pointer;font-size:12px;font-weight:600;transition:border-color .12s,color .12s,background .12s}
+.hud-pill.btn-pill:hover{border-color:var(--primary);color:var(--text);background:rgba(17,30,48,.95)}
 
 /* ── Dead screen ─────────────────────────────────────────────────── */
 #dead-screen{z-index:30}
 #dead-screen .card{text-align:center}
-#dead-screen h2{font-size:32px;font-weight:800;color:#ff6b6b;margin-bottom:8px}
-#dead-screen .ds{font-size:14px;color:#4a7090;margin-bottom:20px}
-#dead-score{font-size:20px;font-weight:700;color:#e0f0ff;margin-bottom:24px}
+#dead-screen h2{font-size:32px;font-weight:800;letter-spacing:-.5px;color:var(--danger);margin-bottom:8px}
+#dead-screen .ds{font-size:14px;color:var(--muted);margin-bottom:20px;line-height:1.5}
+#dead-score{font-size:20px;font-weight:700;font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--text);margin-bottom:24px}
 
 /* ── Mobile touch joy ─────────────────────────────────────────────── */
 #joystick-area{position:fixed;bottom:0;left:0;right:0;height:220px;z-index:15;pointer-events:auto;touch-action:none;display:none}
+@media(max-width:480px){
+  .card{padding:28px 22px}
+}
 @media(max-width:700px),pointer:coarse{
   #joystick-area{display:block}
   #hud-tr{top:auto;bottom:16px;right:16px;flex-direction:column-reverse}
@@ -91,7 +107,7 @@ label{display:block;font-size:12px;font-weight:600;color:#4a7090;margin-bottom:6
       <label for="inp-name-j">Your name</label>
       <input id="inp-name-j" class="inp" maxlength="32" placeholder="Enter name" autocomplete="nickname" spellcheck="false">
       <label for="inp-code">Room code</label>
-      <input id="inp-code" class="inp" maxlength="6" placeholder="ABCDEF" autocapitalize="characters" autocomplete="off" spellcheck="false" style="text-transform:uppercase;letter-spacing:3px;font-family:monospace">
+      <input id="inp-code" class="inp" maxlength="6" placeholder="ABCDEF" autocapitalize="characters" autocomplete="off" spellcheck="false">
       <div class="btn-row">
         <button class="btn" id="btn-back-j">← Back</button>
         <button class="btn primary" id="btn-go-join">Join</button>
